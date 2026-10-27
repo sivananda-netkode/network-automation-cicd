@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+venv/
+
+# Secrets
+.env
+.env.*
+
+# Test and coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Device configuration backups
+backups/*
+!backups/.gitkeep
