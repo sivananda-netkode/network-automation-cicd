@@ -4,6 +4,10 @@ from unittest.mock import Mock, patch
 from src.netbox.get_devices import get_devices
 
 
+@patch.dict("os.environ", {
+    "NETBOX_URL": "http://netbox.example",
+    "NETBOX_TOKEN": "test-token",
+})
 @patch("src.netbox.get_devices.requests.get")
 def test_get_devices_returns_netbox_inventory(mock_get):
     mock_response = Mock()
