@@ -77,6 +77,8 @@ def get_device_state(device_info):
 
 
 def main():
+    """Compare NetBox intended configuration with live device state."""
+
     devices = get_device_configs()
 
     if not devices:
@@ -84,9 +86,14 @@ def main():
             "No device configurations found in NetBox."
         )
 
+    failed_devices = []
+    successful_devices = []
+
     for device in devices:
+        device_name = device["name"]
+
         print(
-            f"\nReading {device['name']} ({device['ip']})..."
+            f"\nReading {device_name} ({device['ip']})..."
         )
 
         try:
@@ -118,16 +125,45 @@ def main():
                 device_state["vlan_output"],
             )
 
-            print_comparison(device["name"], results)
+            print_comparison(device_name, results)
+
+            successful_devices.append(device_name)
 
         except Exception as error:
+            failed_devices.append(device_name)
+
             print(
-                f"FAILED: {device['name']}: "
+                f"FAILED: {device_name}: "
                 f"{type(error).__name__}: {error}"
             )
 
-    print("\nREAD-ONLY DEVICE RETRIEVAL COMPLETE.")
+    print("\n===== LIVE COMPARISON SUMMARY =====")
+    print(f"Total devices: {len(devices)}")
+    print(f"Successful: {len(successful_devices)}")
+    print(f"Failed: {len(failed_devices)}")
+
+    if successful_devices:
+        print(
+            "Successfully compared: "
+            + ", ".join(successful_devices)
+        )
+
+    if failed_devices:
+        print(
+            "Failed devices: "
+            + ", ".join(failed_devices)
+        )
+
+    print("\nREAD-ONLY DEVICE COMPARISON FINISHED.")
     print("No configuration changes were sent to devices.")
+
+    if failed_devices:
+        raise SystemExit(
+            f"Live comparison failed for "
+            f"{len(failed_devices)} device(s)."
+        )
+
+    print("All device comparisons completed successfully.")
 
 
 if __name__ == "__main__":
