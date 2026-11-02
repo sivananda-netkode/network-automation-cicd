@@ -8,6 +8,7 @@ venv/
 # Secrets
 .env
 .env.*
+!.env.example
 
 # Test and coverage
 .pytest_cache/
