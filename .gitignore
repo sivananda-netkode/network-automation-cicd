@@ -18,3 +18,4 @@ htmlcov/
 # Device configuration backups
 backups/*
 !backups/.gitkeep
+test-results.xml
