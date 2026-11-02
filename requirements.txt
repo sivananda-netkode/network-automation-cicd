@@ -11,3 +11,4 @@ requests==2.34.2
 urllib3==2.8.0
 netmiko==4.8.0
 paramiko==3.5.1
+pyflakes==4.1.0
