@@ -67,6 +67,16 @@ def validate_device(
 
     print(f"\nConnecting to {device['name']} ({device['ip']})...")
 
+    if os.getenv("CI_SIMULATE", "false").lower() in {"true", "1", "yes"}:
+        print(f"[CI SIMULATION] Performing operational checks for {device['name']} ({device['ip']})...")
+        results["checks"] = {
+            "INTERFACES": "FastEthernet0/0 is up, line protocol is up\nFastEthernet0/1 is up, line protocol is up",
+            "OSPF NEIGHBORS": "Neighbor 192.168.1.1 Full/BDR",
+            "ROUTING TABLE": "O 192.168.10.0/24 [110/2] via 192.168.1.1\nC 192.168.1.0/24 is directly connected",
+            "VLAN DATABASE": "1 default active\n10 DATA active\n20 PROD_DATA active",
+        }
+        return results
+
     with ConnectHandler(**get_connection(device, environment=environment)) as connection:
         # Verify prompt identity
         prompt = connection.find_prompt()

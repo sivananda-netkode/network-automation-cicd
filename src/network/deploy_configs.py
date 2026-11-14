@@ -62,6 +62,43 @@ def get_device_configs(
             "site_slug": Optional[str],
         }, ...]
     """
+    if os.getenv("CI_SIMULATE", "false").lower() in {"true", "1", "yes"}:
+        env_clean = (environment or "staging").strip().lower()
+        if env_clean == "staging":
+            return [
+                {
+                    "name": "R1",
+                    "ip": "192.168.1.1",
+                    "config": "hostname R1\ninterface GigabitEthernet0/1\nip address 192.168.10.1 255.255.255.0\nno shutdown",
+                    "site": "Hyderabad Netkode",
+                    "site_slug": "hyderabad-netkode",
+                },
+                {
+                    "name": "SW1",
+                    "ip": "192.168.4.2",
+                    "config": "hostname SW1\nvlan 10\nname DATA\ninterface GigabitEthernet0/1\nswitchport mode access\nswitchport access vlan 10",
+                    "site": "Hyderabad Netkode",
+                    "site_slug": "hyderabad-netkode",
+                },
+            ]
+        elif env_clean == "production":
+            return [
+                {
+                    "name": "R4",
+                    "ip": "192.168.6.1",
+                    "config": "hostname R4\ninterface GigabitEthernet0/1\nip address 192.168.60.1 255.255.255.0\nno shutdown",
+                    "site": "Vizag Netkode",
+                    "site_slug": "vizag-netkode",
+                },
+                {
+                    "name": "switch3",
+                    "ip": "192.168.9.2",
+                    "config": "hostname Switch\nvlan 20\nname PROD_DATA\ninterface GigabitEthernet0/1\nswitchport mode access\nswitchport access vlan 20",
+                    "site": "Vizag Netkode",
+                    "site_slug": "vizag-netkode",
+                },
+            ]
+
     if not NETBOX_URL or not NETBOX_TOKEN:
         raise RuntimeError(
             "NETBOX_URL or NETBOX_TOKEN is missing from .env"

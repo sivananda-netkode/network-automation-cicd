@@ -37,6 +37,15 @@ def test_prepare_deployment_plans_rejects_invalid_mode():
         prepare_deployment_plans(mode="destructive_auto")
 
 
+DUMMY_CREDENTIALS = {
+    "DEVICE_USERNAME": "test_user",
+    "DEVICE_PASSWORD": "test_password",
+    "PROD_DEVICE_USERNAME": "prod_user",
+    "PROD_DEVICE_PASSWORD": "prod_password",
+}
+
+
+@patch.dict("os.environ", DUMMY_CREDENTIALS)
 @patch("src.network.deployment_engine.ConnectHandler")
 def test_deploy_device_blocks_on_hostname_mismatch(mock_connect):
     mock_conn_instance = MagicMock()
@@ -55,6 +64,7 @@ def test_deploy_device_blocks_on_hostname_mismatch(mock_connect):
         deploy_device(plan, environment="production")
 
 
+@patch.dict("os.environ", DUMMY_CREDENTIALS)
 @patch("src.network.deployment_engine.ConnectHandler")
 def test_deploy_device_blocks_on_syntax_error(mock_connect):
     mock_conn_instance = MagicMock()
@@ -73,6 +83,7 @@ def test_deploy_device_blocks_on_syntax_error(mock_connect):
         deploy_device(plan, environment="production")
 
 
+@patch.dict("os.environ", DUMMY_CREDENTIALS)
 @patch("src.network.deployment_engine.ConnectHandler")
 def test_deploy_device_success(mock_connect):
     mock_conn_instance = MagicMock()

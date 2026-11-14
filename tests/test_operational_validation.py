@@ -16,6 +16,7 @@ def test_get_connection_credentials_resolution():
         assert conn["host"] == "192.168.1.1"
 
 
+@patch.dict("os.environ", {"DEVICE_USERNAME": "test_user", "DEVICE_PASSWORD": "test_password"})
 @patch("src.network.operational_validation.ConnectHandler")
 def test_validate_device_executes_operational_commands(mock_connect):
     mock_conn = MagicMock()

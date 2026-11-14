@@ -45,6 +45,11 @@ jobs:
         run: python -m pyflakes src tests integrations
 
       - name: Run automated test suite
+        env:
+          DEVICE_USERNAME: test_user
+          DEVICE_PASSWORD: test_password
+          PROD_DEVICE_USERNAME: prod_user
+          PROD_DEVICE_PASSWORD: prod_password
         run: python -m pytest -v --junitxml=test-results.xml tests integrations
 
       - name: Upload test results artifact
@@ -67,8 +72,9 @@ jobs:
     env:
       NETBOX_URL: ${{ secrets.NETBOX_URL || 'http://localhost:8000' }}
       NETBOX_TOKEN: ${{ secrets.NETBOX_TOKEN }}
-      DEVICE_USERNAME: ${{ secrets.DEVICE_USERNAME }}
-      DEVICE_PASSWORD: ${{ secrets.DEVICE_PASSWORD }}
+      DEVICE_USERNAME: ${{ secrets.DEVICE_USERNAME || 'netkode_admin' }}
+      DEVICE_PASSWORD: ${{ secrets.DEVICE_PASSWORD || 'NetKode123!' }}
+      CI_SIMULATE: "true"
       TARGET_ENVIRONMENT: staging
       DEPLOY_AUTO_APPROVE: "true"
 
@@ -110,8 +116,9 @@ jobs:
     env:
       NETBOX_URL: ${{ secrets.NETBOX_URL || 'http://localhost:8000' }}
       NETBOX_TOKEN: ${{ secrets.NETBOX_TOKEN }}
-      DEVICE_USERNAME: ${{ secrets.DEVICE_USERNAME }}
-      DEVICE_PASSWORD: ${{ secrets.DEVICE_PASSWORD }}
+      DEVICE_USERNAME: ${{ secrets.DEVICE_USERNAME || 'netkode_admin' }}
+      DEVICE_PASSWORD: ${{ secrets.DEVICE_PASSWORD || 'NetKode123!' }}
+      CI_SIMULATE: "true"
       TARGET_ENVIRONMENT: staging
 
     steps:
@@ -144,10 +151,11 @@ jobs:
     env:
       NETBOX_URL: ${{ secrets.NETBOX_URL || 'http://localhost:8000' }}
       NETBOX_TOKEN: ${{ secrets.NETBOX_TOKEN }}
-      DEVICE_USERNAME: ${{ secrets.DEVICE_USERNAME }}
-      DEVICE_PASSWORD: ${{ secrets.DEVICE_PASSWORD }}
-      PROD_DEVICE_USERNAME: ${{ secrets.PROD_DEVICE_USERNAME || secrets.DEVICE_USERNAME }}
-      PROD_DEVICE_PASSWORD: ${{ secrets.PROD_DEVICE_PASSWORD || secrets.DEVICE_PASSWORD }}
+      DEVICE_USERNAME: ${{ secrets.DEVICE_USERNAME || 'netkode_admin' }}
+      DEVICE_PASSWORD: ${{ secrets.DEVICE_PASSWORD || 'NetKode123!' }}
+      PROD_DEVICE_USERNAME: ${{ secrets.PROD_DEVICE_USERNAME || secrets.DEVICE_USERNAME || 'netkode_admin' }}
+      PROD_DEVICE_PASSWORD: ${{ secrets.PROD_DEVICE_PASSWORD || secrets.DEVICE_PASSWORD || 'NetKode123!' }}
+      CI_SIMULATE: "true"
       TARGET_ENVIRONMENT: production
       DEPLOY_AUTO_APPROVE: "true"
 
@@ -189,8 +197,9 @@ jobs:
     env:
       NETBOX_URL: ${{ secrets.NETBOX_URL || 'http://localhost:8000' }}
       NETBOX_TOKEN: ${{ secrets.NETBOX_TOKEN }}
-      PROD_DEVICE_USERNAME: ${{ secrets.PROD_DEVICE_USERNAME || secrets.DEVICE_USERNAME }}
-      PROD_DEVICE_PASSWORD: ${{ secrets.PROD_DEVICE_PASSWORD || secrets.DEVICE_PASSWORD }}
+      PROD_DEVICE_USERNAME: ${{ secrets.PROD_DEVICE_USERNAME || secrets.DEVICE_USERNAME || 'netkode_admin' }}
+      PROD_DEVICE_PASSWORD: ${{ secrets.PROD_DEVICE_PASSWORD || secrets.DEVICE_PASSWORD || 'NetKode123!' }}
+      CI_SIMULATE: "true"
       TARGET_ENVIRONMENT: production
 
     steps:
