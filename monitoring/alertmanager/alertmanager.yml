@@ -1,0 +1,19 @@
+global:
+  resolve_timeout: 5m
+
+# Routing logic for network alerts
+route:
+  group_by: ['alertname', 'device', 'ifDescr']
+  group_wait: 10s
+  group_interval: 30s
+  repeat_interval: 1h
+  receiver: 'jira-webhook-gateway'
+
+# Webhook receiver targeting the Jira Webhook Gateway
+receivers:
+  - name: 'jira-webhook-gateway'
+    webhook_configs:
+      - url: 'http://alert-gateway:5050/api/v1/alerts'
+        send_resolved: true
+        max_alerts: 10
+

@@ -17,9 +17,35 @@ SESSION_COMMANDS = {
 }
 
 
+DESTRUCTIVE_COMMAND_PREFIXES = (
+    "write erase",
+    "erase startup-config",
+    "erase nvram:",
+    "reload",
+    "format ",
+    "delete ",
+    "configure replace",
+)
+
+
 def generate_missing_config(results):
     """Generate a dry-run configuration preview from comparison results."""
 
+    # Block destructive commands before generating the plan.
+    for item in results:
+        command = item["command"].strip().casefold()
+
+        if any(
+            command == prefix.strip()
+            or command.startswith(prefix)
+            for prefix in DESTRUCTIVE_COMMAND_PREFIXES
+        ):
+            return None, (
+                f"Destructive command detected: {command}. "
+                "Deployment plan blocked."
+            )
+
+    # Block plans containing configuration conflicts.
     if any(item["status"] == "CONFLICT" for item in results):
         return None, "CONFLICT detected. Deployment plan blocked."
 
@@ -83,6 +109,8 @@ def generate_missing_config(results):
 
 
 def print_deployment_plan(device_name, commands, message):
+    """Print a deployment preview without applying configuration."""
+
     print(f"\n===== {device_name}: DEPLOYMENT PLAN =====")
     print(message)
 
@@ -101,6 +129,8 @@ def print_deployment_plan(device_name, commands, message):
 
 
 def main():
+    """Generate deployment previews for all eligible NetBox devices."""
+
     devices = get_device_configs()
 
     if not devices:

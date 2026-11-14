@@ -19,3 +19,11 @@ htmlcov/
 backups/*
 !backups/.gitkeep
 test-results.xml
+/monitoring/snmp-exporter/snmp.yml
+
+# Deployment Audit Logs
+deployments/*
+!deployments/.gitkeep
+
+# Dynamic Prometheus Discovery Targets
+monitoring/prometheus/targets/devices.json

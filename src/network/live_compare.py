@@ -1,6 +1,11 @@
-
 import os
+import sys
 from pathlib import Path
+from typing import Any, Dict, Optional
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from dotenv import load_dotenv
 from netmiko import ConnectHandler
@@ -10,21 +15,37 @@ from src.network.compare_configs import (
     print_comparison,
 )
 from src.network.deploy_configs import get_device_configs
+from src.network.environment_config import get_environment_config
 
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(PROJECT_ROOT / ".env")
 
 
-def get_device_state(device_info):
-    """Retrieve device state using read-only Cisco IOS commands."""
+def get_device_state(
+    device_info: Dict[str, Any],
+    environment: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Retrieve device state using read-only Cisco IOS commands.
 
-    username = os.getenv("DEVICE_USERNAME")
-    password = os.getenv("DEVICE_PASSWORD")
+    Args:
+        device_info: Device dict containing 'name' and 'ip'.
+        environment: Optional environment profile ('staging' or 'production').
+
+    Returns:
+        Dict with 'running_config', 'vlan_output', and 'interface_output'.
+    """
+    target_env = environment or device_info.get("environment")
+
+    if target_env:
+        env_cfg = get_environment_config(target_env)
+        username, password = env_cfg.get_credentials()
+    else:
+        username = os.getenv("DEVICE_USERNAME")
+        password = os.getenv("DEVICE_PASSWORD")
+
     device_ip = device_info.get("ip")
 
     if not username or not password:
-        raise RuntimeError("SSH credentials are missing from .env")
+        raise RuntimeError("SSH credentials are missing from environment.")
 
     if not device_ip:
         raise ValueError("Device IP address is missing.")
@@ -40,13 +61,10 @@ def get_device_state(device_info):
     }
 
     with ConnectHandler(**connection_params) as connection:
-
         running_config = connection.send_command(
             "show running-config"
         )
 
-        # Supplementary information; these commands may not
-        # be supported on every Cisco IOS device.
         try:
             vlan_output = connection.send_command(
                 "show vlan brief"
@@ -61,14 +79,6 @@ def get_device_state(device_info):
         except Exception:
             interface_output = ""
 
-    if (
-        not running_config
-        or "% Invalid input" in running_config
-    ):
-        raise RuntimeError(
-            "Could not retrieve running configuration."
-        )
-
     return {
         "running_config": running_config,
         "vlan_output": vlan_output,
@@ -77,61 +87,64 @@ def get_device_state(device_info):
 
 
 def main():
-    """Compare NetBox intended configuration with live device state."""
+    target_env = sys.argv[1] if len(sys.argv) > 1 else None
 
-    devices = get_device_configs()
+    if target_env:
+        print(f"\nRetrieving configurations for environment '{target_env}'...")
+        devices = get_device_configs(environment=target_env)
+    else:
+        print("\nRetrieving default device configurations...")
+        devices = get_device_configs()
 
     if not devices:
         raise SystemExit(
-            "No device configurations found in NetBox."
+            "No active device configurations found in NetBox."
         )
 
-    failed_devices = []
+    print("\n===== NETWORK STATE COMPARISON =====")
+    print("Fetching live device state using read-only SSH.")
+    print("Comparing NetBox desired state against running configurations.\n")
+
     successful_devices = []
+    failed_devices = []
 
     for device in devices:
         device_name = device["name"]
+        device_ip = device["ip"]
 
-        print(
-            f"\nReading {device_name} ({device['ip']})..."
-        )
+        print(f"\n--- Checking {device_name} ({device_ip}) ---")
 
         try:
-            device_state = get_device_state(device)
+            device_state = get_device_state(device, environment=target_env)
 
-            print("\n--- VLAN INFORMATION ---")
+            if not device_state["running_config"]:
+                raise RuntimeError(
+                    "Unable to retrieve running-config from device."
+                )
 
-            if (
-                not device_state["vlan_output"]
-                or "% Invalid input" in device_state["vlan_output"]
-            ):
-                print("VLAN information unavailable.")
+            print(f"Retrieved running-config for {device_name}.")
+
+            if device_state["vlan_output"]:
+                print(f"Retrieved VLAN database for {device_name}.")
             else:
-                print(device_state["vlan_output"])
+                print(f"No VLAN database returned for {device_name}.")
 
-            print("\n--- INTERFACE INFORMATION ---")
-
-            if (
-                not device_state["interface_output"]
-                or "% Invalid input" in device_state["interface_output"]
-            ):
-                print("Interface information unavailable.")
-            else:
+            if device_state["interface_output"]:
+                print(f"Retrieved interface status for {device_name}:")
                 print(device_state["interface_output"])
 
             results = compare_config_lines(
                 device["config"],
                 device_state["running_config"],
                 device_state["vlan_output"],
+                device_state["interface_output"],
             )
 
             print_comparison(device_name, results)
-
             successful_devices.append(device_name)
 
         except Exception as error:
             failed_devices.append(device_name)
-
             print(
                 f"FAILED: {device_name}: "
                 f"{type(error).__name__}: {error}"

@@ -38,7 +38,19 @@ def normalize_config_line(line):
 
 def normalize_section_name(line):
     """Normalize section names while preserving their values."""
+
     line = " ".join(line.strip().split())
+
+    # Normalize Cisco VLAN interfaces:
+    # interface vlan 10 == interface Vlan10
+    match = re.match(
+        r"^interface\s+vlan\s*(\d+)$",
+        line,
+        re.IGNORECASE,
+    )
+
+    if match:
+        return f"interface vlan{match.group(1)}"
 
     match = re.match(
         r"^interface\s+(.+)$",
@@ -69,7 +81,6 @@ def normalize_section_name(line):
 
     return normalize_config_line(line)
 
-
 def extract_sections(config):
     """Parse configuration into normalized global and section commands."""
     parsed = parse_config(config)
@@ -84,13 +95,14 @@ def extract_sections(config):
     for section, commands in parsed["sections"].items():
         normalized_section = normalize_section_name(section)
 
-        sections[normalized_section] = [
+        existing = sections.setdefault(normalized_section, [])
+
+        existing.extend(
             normalize_config_line(command)
             for command in commands
-        ]
+        )
 
     return sections
-
 
 def extract_vlan_database(vlan_output):
     """Extract VLAN IDs and names from show vlan brief output."""
@@ -186,6 +198,7 @@ def compare_config_lines(
     intended_config,
     running_config,
     vlan_output="",
+    interface_output="",
 ):
     """Compare intended configuration against read-only live state."""
     intended_sections = extract_sections(intended_config)
@@ -252,6 +265,11 @@ def compare_config_lines(
             elif running_counts[command] > 0:
                 status = "ALREADY EXISTS"
                 running_counts[command] -= 1
+            elif (
+                normalize_config_line(command) == "no shutdown"
+                and interface_is_enabled(section, interface_output)
+            ):
+                status = "ALREADY EXISTS"
             else:
                 status = "MISSING"
 
@@ -261,6 +279,30 @@ def compare_config_lines(
             })
 
     return results
+def interface_is_enabled(section, interface_output):
+    """Check whether an interface is not administratively shut down."""
+
+    if not interface_output or not section.startswith("interface "):
+        return False
+
+    intended_name = section.split(" ", 1)[1].replace(" ", "").casefold()
+
+    for line in interface_output.splitlines():
+        fields = line.split()
+
+        if len(fields) < 6:
+            continue
+
+        live_name = fields[0].replace(" ", "").casefold()
+
+        if live_name != intended_name:
+            continue
+
+        status = " ".join(fields[4:-1]).casefold()
+
+        return status in {"up", "down"}
+
+    return False
 
 
 def print_comparison(device_name, results):

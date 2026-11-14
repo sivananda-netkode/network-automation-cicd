@@ -1,12 +1,20 @@
-
 import os
+import sys
 from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 import requests
 from dotenv import load_dotenv
 
+from src.network.environment_config import (
+    get_environment_config,
+    validate_device_for_environment,
+)
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(PROJECT_ROOT / ".env")
 
 NETBOX_URL = os.getenv("NETBOX_URL", "").rstrip("/")
@@ -26,9 +34,34 @@ SESSION_COMMANDS = {
 }
 
 
-def get_device_configs():
-    """Retrieve active device configurations from NetBox."""
+def get_device_configs(
+    environment: Optional[str] = None,
+    site_slug: Optional[str] = None,
+    validate_env: bool = True,
+) -> List[Dict[str, Any]]:
+    """Retrieve active device configurations from NetBox.
 
+    Supports environment-based filtering ('staging' vs. 'production') to prevent
+    cross-environment configuration leakage, while maintaining backward compatibility
+    for existing parameterless calls.
+
+    Args:
+        environment: Optional target environment ('staging' or 'production').
+                     Maps dynamically to site slug ('hyderabad-netkode' or 'vizag-netkode').
+        site_slug: Optional explicit NetBox site slug.
+        validate_env: If True and environment is provided, enforces strict anti-cross-pollution
+                      guard to ensure staging devices cannot be deployed to production or vice versa.
+
+    Returns:
+        List of dictionaries with device details:
+        [{
+            "name": str,
+            "ip": str,
+            "config": str,
+            "site": Optional[str],
+            "site_slug": Optional[str],
+        }, ...]
+    """
     if not NETBOX_URL or not NETBOX_TOKEN:
         raise RuntimeError(
             "NETBOX_URL or NETBOX_TOKEN is missing from .env"
@@ -41,15 +74,22 @@ def get_device_configs():
         "Accept": "application/json",
     }
 
-    params = {
+    params: Dict[str, Any] = {
         "limit": 100,
         "status": "active",
     }
 
-    if NETBOX_SITE_ID:
-        params["site_id"] = NETBOX_SITE_ID
+    # Resolve site filter
+    target_site_slug = site_slug
+    if environment:
+        env_profile = get_environment_config(environment)
+        if not target_site_slug:
+            target_site_slug = env_profile.site_slug
 
-    devices = []
+    if target_site_slug:
+        params["site"] = target_site_slug
+
+    devices: List[Dict[str, Any]] = []
 
     while url:
         response = requests.get(
@@ -79,10 +119,18 @@ def get_device_configs():
                 )
                 continue
 
+            # Strict environment anti-cross-pollution validation
+            if environment and validate_env:
+                validate_device_for_environment(device_name, environment)
+
+            site_info = device.get("site") or {}
+
             devices.append({
                 "name": device_name,
                 "ip": primary_ip["address"].split("/")[0],
                 "config": config,
+                "site": site_info.get("name"),
+                "site_slug": site_info.get("slug"),
             })
 
         url = data.get("next")
@@ -92,7 +140,14 @@ def get_device_configs():
 
 
 def main():
-    devices = get_device_configs()
+    target_env = sys.argv[1] if len(sys.argv) > 1 else None
+
+    if target_env:
+        print(f"\nDRY RUN: Retrieving configurations for environment '{target_env}'...")
+        devices = get_device_configs(environment=target_env)
+    else:
+        print("\nDRY RUN: Retrieving all active device configurations...")
+        devices = get_device_configs()
 
     if not devices:
         raise SystemExit(
@@ -111,9 +166,11 @@ def main():
             if line.strip()
         ]
 
+        site_display = device.get("site") or "Unknown Site"
         print(
             f"\nDevice: {device['name']}"
-            f"\nIP: {device['ip']}"
+            f"\nSite:   {site_display}"
+            f"\nIP:     {device['ip']}"
             f"\nConfiguration commands available: {len(config_lines)}"
         )
 

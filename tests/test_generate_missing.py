@@ -137,3 +137,17 @@ def test_preserves_existing_interface_context_for_missing_command():
         " no shutdown",
         "exit",
     ]
+
+
+def test_blocks_destructive_configuration_commands():
+    results = [
+        {
+            "status": "MISSING",
+            "command": "write erase",
+        }
+    ]
+
+    commands, message = generate_missing_config(results)
+
+    assert commands is None
+    assert "blocked" in message.lower()

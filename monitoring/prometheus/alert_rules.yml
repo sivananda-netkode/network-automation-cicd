@@ -1,0 +1,58 @@
+groups:
+  - name: network_device_alerts
+    rules:
+      # 1. Device Unreachable / Down (Prometheus up == 0)
+      - alert: DeviceUnreachable
+        expr: up{job="cisco_snmp"} == 0
+        for: 30s
+        labels:
+          severity: Critical
+          monitoring_source: "Prometheus / SNMP"
+        annotations:
+          summary: "Network device {{ $labels.device }} ({{ $labels.instance }}) is UNREACHABLE"
+          description: "Device {{ $labels.device }} has stopped responding to SNMP polls for over 30 seconds."
+
+      # 2. Interface Operational Down (ifOperStatus == 2)
+      - alert: NetworkInterfaceDown
+        expr: (ifOperStatus{job="cisco_snmp"} == 2) * on(instance, ifIndex) group_left(ifDescr) (ifDescr > 0)
+        for: 30s
+        labels:
+          severity: High
+          monitoring_source: "Prometheus / SNMP"
+        annotations:
+          summary: "Interface {{ $labels.ifDescr }} is DOWN on {{ $labels.device }}"
+          description: "Interface {{ $labels.ifDescr }} (ifIndex: {{ $labels.ifIndex }}) on device {{ $labels.device }} ({{ $labels.instance }}) transitioned to operational DOWN (status=2)."
+
+      # 3. Device Unexpected Reboot (sysUpTime < 5 minutes)
+      - alert: DeviceUnexpectedReboot
+        expr: (sysUpTime{job="cisco_snmp"} < 30000) and (sysUpTime{job="cisco_snmp"} > 0)
+        for: 1m
+        labels:
+          severity: High
+          monitoring_source: "Prometheus / SNMP"
+        annotations:
+          summary: "Device {{ $labels.device }} ({{ $labels.instance }}) recently rebooted"
+          description: "Device uptime is less than 5 minutes. An unexpected restart may have occurred."
+
+      # 4. High CPU Utilization (cpmCPUTotal5min > 85%)
+      - alert: HighCpuUtilization
+        expr: cpmCPUTotal5min{job="cisco_snmp"} > 85
+        for: 3m
+        labels:
+          severity: High
+          monitoring_source: "Prometheus / SNMP"
+        annotations:
+          summary: "High CPU utilization on {{ $labels.device }}"
+          description: "5-minute CPU utilization on {{ $labels.device }} is {{ $value }}%, exceeding the 85% threshold."
+
+      # 5. High Memory Usage (> 90%)
+      - alert: HighMemoryUsage
+        expr: (ciscoMemoryPoolUsed{job="cisco_snmp"} / (ciscoMemoryPoolUsed{job="cisco_snmp"} + ciscoMemoryPoolFree{job="cisco_snmp"} and ciscoMemoryPoolFree{job="cisco_snmp"} > 0)) * 100 > 90
+        for: 3m
+        labels:
+          severity: High
+          monitoring_source: "Prometheus / SNMP"
+        annotations:
+          summary: "High Memory pool utilization on {{ $labels.device }}"
+          description: "Memory pool utilization on {{ $labels.device }} is {{ $value }}%, exceeding the 90% threshold."
+

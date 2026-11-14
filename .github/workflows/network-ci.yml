@@ -1,4 +1,4 @@
-name: Network Automation CI
+name: Network Automation CI/CD Pipeline
 
 on:
   push:
@@ -11,10 +11,11 @@ on:
 
 permissions:
   contents: read
+  deployments: write
 
 jobs:
-  test:
-    name: Validate Network Automation Project
+  validate:
+    name: 1. CI Validation & Automated Testing
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -22,7 +23,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python 3.13
         uses: actions/setup-python@v5
         with:
           python-version: "3.13"
@@ -38,17 +39,175 @@ jobs:
         run: python -m pip check
 
       - name: Compile Python files
-        run: python -m compileall -q src tests
-      - name: Run Pyflakes
-        run: python -m pyflakes src tests
+        run: python -m compileall -q src tests integrations
 
-      - name: Run automated tests
-        run: python -m pytest -v --junitxml=test-results.xml
+      - name: Run Pyflakes static analysis
+        run: python -m pyflakes src tests integrations
 
-      - name: Upload test results
+      - name: Run automated test suite
+        run: python -m pytest -v --junitxml=test-results.xml tests integrations
+
+      - name: Upload test results artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pytest-results
           path: test-results.xml
           if-no-files-found: ignore
+
+  deploy-staging:
+    name: 2. Deploy to Staging (Hyderabad Netkode)
+    needs: [validate]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: Staging
+
+    env:
+      NETBOX_URL: ${{ secrets.NETBOX_URL || 'http://localhost:8000' }}
+      NETBOX_TOKEN: ${{ secrets.NETBOX_TOKEN }}
+      DEVICE_USERNAME: ${{ secrets.DEVICE_USERNAME }}
+      DEVICE_PASSWORD: ${{ secrets.DEVICE_PASSWORD }}
+      TARGET_ENVIRONMENT: staging
+      DEPLOY_AUTO_APPROVE: "true"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Deploy Staging Configuration
+        run: python -m src.network.deployment_engine staging --auto-approve
+
+      - name: Upload Staging Audit Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-audit-log
+          path: deployments/audit_log.jsonl
+          if-no-files-found: ignore
+
+  verify-staging:
+    name: 3. Verify Staging Health & Operations
+    needs: [deploy-staging]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: Staging
+
+    env:
+      NETBOX_URL: ${{ secrets.NETBOX_URL || 'http://localhost:8000' }}
+      NETBOX_TOKEN: ${{ secrets.NETBOX_TOKEN }}
+      DEVICE_USERNAME: ${{ secrets.DEVICE_USERNAME }}
+      DEVICE_PASSWORD: ${{ secrets.DEVICE_PASSWORD }}
+      TARGET_ENVIRONMENT: staging
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Run Staging Operational Health Checks
+        run: python -m src.network.operational_validation staging
+
+  deploy-production:
+    name: 4. Deploy to Production (Vizag Netkode)
+    needs: [verify-staging]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: Production
+
+    env:
+      NETBOX_URL: ${{ secrets.NETBOX_URL || 'http://localhost:8000' }}
+      NETBOX_TOKEN: ${{ secrets.NETBOX_TOKEN }}
+      DEVICE_USERNAME: ${{ secrets.DEVICE_USERNAME }}
+      DEVICE_PASSWORD: ${{ secrets.DEVICE_PASSWORD }}
+      PROD_DEVICE_USERNAME: ${{ secrets.PROD_DEVICE_USERNAME || secrets.DEVICE_USERNAME }}
+      PROD_DEVICE_PASSWORD: ${{ secrets.PROD_DEVICE_PASSWORD || secrets.DEVICE_PASSWORD }}
+      TARGET_ENVIRONMENT: production
+      DEPLOY_AUTO_APPROVE: "true"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Deploy Production Configuration
+        run: python -m src.network.deployment_engine production --auto-approve
+
+      - name: Upload Production Audit Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-audit-log
+          path: deployments/audit_log.jsonl
+          if-no-files-found: ignore
+
+  verify-production:
+    name: 5. Verify Production Health & Operations
+    needs: [deploy-production]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: Production
+
+    env:
+      NETBOX_URL: ${{ secrets.NETBOX_URL || 'http://localhost:8000' }}
+      NETBOX_TOKEN: ${{ secrets.NETBOX_TOKEN }}
+      PROD_DEVICE_USERNAME: ${{ secrets.PROD_DEVICE_USERNAME || secrets.DEVICE_USERNAME }}
+      PROD_DEVICE_PASSWORD: ${{ secrets.PROD_DEVICE_PASSWORD || secrets.DEVICE_PASSWORD }}
+      TARGET_ENVIRONMENT: production
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Run Production Operational Health Checks
+        run: python -m src.network.operational_validation production

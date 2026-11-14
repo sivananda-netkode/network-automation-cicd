@@ -431,3 +431,31 @@ router ospf {process_id}
     assert statuses[
         f"router ospf {process_id}".casefold()
     ] == "CONFLICT"
+
+
+def test_no_shutdown_already_exists_when_interface_is_operationally_down():
+    intended = """
+interface Vlan10
+ ip address 192.168.10.1 255.255.255.0
+ no shutdown
+"""
+
+    running = """
+interface Vlan10
+ ip address 192.168.10.1 255.255.255.0
+"""
+
+    interface_output = """
+Interface              IP-Address      OK? Method Status                Protocol
+Vlan10                 192.168.10.1    YES manual down                  down
+"""
+
+    results = compare_config_lines(
+        intended,
+        running,
+        interface_output=interface_output,
+    )
+
+    statuses = get_statuses(results)
+
+    assert statuses["no shutdown"] == "ALREADY EXISTS"
