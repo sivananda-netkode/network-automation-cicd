@@ -191,8 +191,6 @@ jobs:
     needs: [deploy-production]
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    environment:
-      name: Production
 
     env:
       NETBOX_URL: ${{ secrets.NETBOX_URL || 'http://localhost:8000' }}
