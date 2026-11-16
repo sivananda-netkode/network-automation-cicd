@@ -1,11 +1,11 @@
 """Sequential Multi-Environment Deployment Pipeline Runner.
 
 Executes the complete deployment lifecycle in sequence:
-  1. Deploy Staging Configuration (Hyderabad Netkode)
-  2. Verify Staging Health & Operations
-  3. Safety Gate: Only if Staging succeeds 100%, proceed to Production
-  4. Deploy Production Configuration (Vizag Netkode)
-  5. Verify Production Health & Operations
+  1. CI Validation & Automated Testing (Automatic)
+  2. Deploy Staging Configuration (Hyderabad Netkode) (Automatic)
+  3. Verify Staging Health & Operations (Automatic)
+  4. Production Deployment (Vizag Netkode) (You approve once)
+  5. Verify Production Health & Operations (Automatic)
 """
 
 import argparse
@@ -17,12 +17,26 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+import pytest
+
 from src.network.deployment_engine import run_deployment
 from src.network.operational_validation import run_validation
 
 
-def run_pipeline(auto_approve: bool = False, mode: str = "incremental") -> bool:
-    """Execute Staging deployment, verification, and then Production."""
+def run_ci_validation() -> bool:
+    """Execute CI validation test suite automatically."""
+    print("\n>>> [STEP 1/5] RUNNING CI VALIDATION (Automatic)...")
+    exit_code = pytest.main(["-q", "--tb=line", "tests/"])
+    if exit_code != 0:
+        print("\n❌ CRITICAL: CI validation failed! Aborting pipeline.")
+        print("⛔ Neither Staging nor Production will be touched.")
+        return False
+    print("✔ CI validation passed successfully (100%).")
+    return True
+
+
+def run_pipeline(auto_approve: bool = False, mode: str = "incremental", skip_ci: bool = False) -> bool:
+    """Execute CI validation, Staging deployment & verification, Toll Gate, and Production."""
     start_total = time.time()
 
     print("\n" + "=" * 70)
@@ -30,13 +44,22 @@ def run_pipeline(auto_approve: bool = False, mode: str = "incremental") -> bool:
     print("=" * 70)
 
     # -------------------------------------------------------------
-    # STAGE 1: STAGING DEPLOYMENT
+    # STAGE 1: CI VALIDATION (Automatic)
     # -------------------------------------------------------------
-    print("\n>>> [STEP 1/4] DEPLOYING TO STAGING (Hyderabad Netkode)...")
+    if not skip_ci:
+        if not run_ci_validation():
+            return False
+    else:
+        print("\n>>> [STEP 1/5] CI VALIDATION: Skipped via --skip-ci flag.")
+
+    # -------------------------------------------------------------
+    # STAGE 2: STAGING DEPLOYMENT (Automatic)
+    # -------------------------------------------------------------
+    print("\n>>> [STEP 2/5] DEPLOYING TO STAGING (Hyderabad Netkode) (Automatic)...")
     staging_deploy_ok = run_deployment(
         environment="staging",
         mode=mode,
-        auto_approve=auto_approve,
+        auto_approve=True,  # Staging deployment is automatic
     )
 
     if not staging_deploy_ok:
@@ -47,9 +70,9 @@ def run_pipeline(auto_approve: bool = False, mode: str = "incremental") -> bool:
     print("✔ Staging deployment completed successfully.")
 
     # -------------------------------------------------------------
-    # STAGE 2: STAGING OPERATIONAL VERIFICATION
+    # STAGE 3: STAGING OPERATIONAL VERIFICATION (Automatic)
     # -------------------------------------------------------------
-    print("\n>>> [STEP 2/4] VERIFYING STAGING HEALTH & OPERATIONS...")
+    print("\n>>> [STEP 3/5] VERIFYING STAGING HEALTH & OPERATIONS (Automatic)...")
     staging_verify_ok = run_validation(environment="staging")
 
     if not staging_verify_ok:
@@ -60,11 +83,11 @@ def run_pipeline(auto_approve: bool = False, mode: str = "incremental") -> bool:
     print("✔ Staging health & operational verification passed (100%).")
 
     # -------------------------------------------------------------
-    # TOLL GATE: STAGING SUCCESS CONFIRMED -> PROCEED TO PRODUCTION
+    # STAGE 4: PRODUCTION DEPLOYMENT (You approve once)
     # -------------------------------------------------------------
     print("\n" + "-" * 70)
     print("✔ STAGING SUCCESS CONFIRMED: All staging checks passed.")
-    print("Proceeding to PRODUCTION (Vizag Netkode)...")
+    print("TOLL GATE: Ready for PRODUCTION deployment (Vizag Netkode).")
     print("-" * 70)
 
     if not auto_approve:
@@ -77,10 +100,7 @@ def run_pipeline(auto_approve: bool = False, mode: str = "incremental") -> bool:
             print("\nNon-interactive session without --auto-approve. Aborting.")
             return False
 
-    # -------------------------------------------------------------
-    # STAGE 3: PRODUCTION DEPLOYMENT
-    # -------------------------------------------------------------
-    print("\n>>> [STEP 3/4] DEPLOYING TO PRODUCTION (Vizag Netkode)...")
+    print("\n>>> [STEP 4/5] DEPLOYING TO PRODUCTION (Vizag Netkode)...")
     prod_deploy_ok = run_deployment(
         environment="production",
         mode=mode,
@@ -94,9 +114,9 @@ def run_pipeline(auto_approve: bool = False, mode: str = "incremental") -> bool:
     print("✔ Production deployment completed successfully.")
 
     # -------------------------------------------------------------
-    # STAGE 4: PRODUCTION OPERATIONAL VERIFICATION
+    # STAGE 5: PRODUCTION OPERATIONAL VERIFICATION (Automatic)
     # -------------------------------------------------------------
-    print("\n>>> [STEP 4/4] VERIFYING PRODUCTION HEALTH & OPERATIONS...")
+    print("\n>>> [STEP 5/5] VERIFYING PRODUCTION HEALTH & OPERATIONS (Automatic)...")
     prod_verify_ok = run_validation(environment="production")
 
     if not prod_verify_ok:
@@ -120,7 +140,12 @@ def main():
     parser.add_argument(
         "--auto-approve",
         action="store_true",
-        help="Automatically proceed from Staging to Production without interactive prompt",
+        help="Automatically proceed to Production without interactive Toll Gate prompt",
+    )
+    parser.add_argument(
+        "--skip-ci",
+        action="store_true",
+        help="Skip CI validation tests and proceed directly to deployments",
     )
     parser.add_argument(
         "--mode",
@@ -130,7 +155,7 @@ def main():
     )
 
     args = parser.parse_args()
-    success = run_pipeline(auto_approve=args.auto_approve, mode=args.mode)
+    success = run_pipeline(auto_approve=args.auto_approve, mode=args.mode, skip_ci=args.skip_ci)
     if not success:
         raise SystemExit(1)
 

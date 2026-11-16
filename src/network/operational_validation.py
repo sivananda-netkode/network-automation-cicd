@@ -67,7 +67,8 @@ def validate_device(
 
     print(f"\nConnecting to {device['name']} ({device['ip']})...")
 
-    if os.getenv("CI_SIMULATE", "false").lower() in {"true", "1", "yes"}:
+    is_testing = bool(os.getenv("PYTEST_CURRENT_TEST"))
+    if not is_testing and os.getenv("CI_SIMULATE", "false").lower() in {"true", "1", "yes"}:
         print(f"[CI SIMULATION] Performing operational checks for {device['name']} ({device['ip']})...")
         results["checks"] = {
             "INTERFACES": "FastEthernet0/0 is up, line protocol is up\nFastEthernet0/1 is up, line protocol is up",

@@ -62,7 +62,8 @@ def get_device_configs(
             "site_slug": Optional[str],
         }, ...]
     """
-    if os.getenv("CI_SIMULATE", "false").lower() in {"true", "1", "yes"}:
+    is_testing = bool(os.getenv("PYTEST_CURRENT_TEST"))
+    if not is_testing and os.getenv("CI_SIMULATE", "false").lower() in {"true", "1", "yes"}:
         env_clean = (environment or "staging").strip().lower()
         if env_clean == "staging":
             return [

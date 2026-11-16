@@ -75,7 +75,8 @@ def prepare_deployment_plans(
     for device in devices:
         print(f"\nPreparing {device['name']} ({device['ip']})...")
 
-        if os.getenv("CI_SIMULATE", "false").lower() in {"true", "1", "yes"}:
+        is_testing = bool(os.getenv("PYTEST_CURRENT_TEST"))
+        if not is_testing and os.getenv("CI_SIMULATE", "false").lower() in {"true", "1", "yes"}:
             commands = get_configuration_commands(device["config"].splitlines())
             plans.append({
                 **device,
@@ -162,7 +163,8 @@ def create_pre_deployment_backups(
     for plan in targets:
         print(f"\nTaking pre-deployment backup for {plan['name']}...")
 
-        if os.getenv("CI_SIMULATE", "false").lower() in {"true", "1", "yes"}:
+        is_testing = bool(os.getenv("PYTEST_CURRENT_TEST"))
+        if not is_testing and os.getenv("CI_SIMULATE", "false").lower() in {"true", "1", "yes"}:
             backup_dir = PROJECT_ROOT / "backups"
             backup_dir.mkdir(parents=True, exist_ok=True)
             backup_file = str(backup_dir / f"backup_{plan['name']}_ci_simulated.cfg")
@@ -230,7 +232,8 @@ def deploy_device(
     start_time = time.time()
     print(f"\nConnecting to {plan['name']} ({plan['ip']})...")
 
-    if os.getenv("CI_SIMULATE", "false").lower() in {"true", "1", "yes"}:
+    is_testing = bool(os.getenv("PYTEST_CURRENT_TEST"))
+    if not is_testing and os.getenv("CI_SIMULATE", "false").lower() in {"true", "1", "yes"}:
         print(f"[CI SIMULATION] Simulating Netmiko session to {plan['name']} ({plan['ip']})...")
         print(f"[CI SIMULATION] Device identity verified: prompt '{plan['name']}#' matches '{plan['name']}'.")
         print(f"[CI SIMULATION] Applying {len(commands)} configuration commands to {plan['name']}...")
@@ -301,7 +304,8 @@ def verify_device(
     environment: Optional[str] = None,
 ) -> bool:
     """Verify intended configuration against the live device post-deployment."""
-    if os.getenv("CI_SIMULATE", "false").lower() in {"true", "1", "yes"}:
+    is_testing = bool(os.getenv("PYTEST_CURRENT_TEST"))
+    if not is_testing and os.getenv("CI_SIMULATE", "false").lower() in {"true", "1", "yes"}:
         print(f"[CI SIMULATION] Post-deployment configuration verification passed for {plan['name']}.")
         return True
 
@@ -365,10 +369,12 @@ def run_deployment(
 
     print(f"\nDevices requiring deployment: {len(targets)}")
 
-    if not auto_approve:
+    # Staging deployments run automatically; Production requires approval once unless auto_approve is True
+    needs_approval = (not auto_approve) and (env_name == "production")
+    if needs_approval:
         approval_text = "DEPLOY FULL" if mode == "full" else "DEPLOY"
         try:
-            approval = input(f"\nType {approval_text} to approve deployment: ").strip()
+            approval = input(f"\nType {approval_text} to approve PRODUCTION deployment: ").strip()
             if approval != approval_text:
                 print("\nDeployment cancelled by user. No configuration was applied.")
                 return False
